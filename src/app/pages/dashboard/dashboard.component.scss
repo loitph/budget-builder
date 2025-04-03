@@ -1,0 +1,7 @@
+.dashboard-container {
+  @apply size-full flex flex-col gap-2 overflow-hidden;
+
+  .section {
+    @apply overflow-auto h-[calc(100vh-55px-16px)] bg-primary rounded-md border-solid border-2 p-4;
+  }
+}
