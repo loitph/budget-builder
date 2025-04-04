@@ -4,5 +4,6 @@ export interface BudgetData {
   value?: number;
   list?: BudgetData[];
   total?: number[];
+  type?: 'income' | 'expense';
   editable?: boolean;
 }
