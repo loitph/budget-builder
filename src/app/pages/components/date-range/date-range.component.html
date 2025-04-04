@@ -7,7 +7,7 @@
       (change)="selectNumberOfMonths()"
     >
       @for (monthNumber of months; track $index) {
-        <option [value]="monthNumber">{{ monthNumber }}</option>
+      <option [value]="monthNumber">{{ monthNumber }}</option>
       }
     </select>
   </div>
@@ -19,7 +19,7 @@
       (change)="selectYears()"
     >
       @for (year of years; track $index) {
-        <option [value]="year">{{ year }}</option>
+      <option [value]="year">{{ year }}</option>
       }
     </select>
   </div>

@@ -78,7 +78,7 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
   constructor(
     private scrollEvent: ScrollEventService,
     private balance: BalanceService,
-    private date: DateService,
+    private date: DateService
   ) {}
 
   ngOnInit(): void {
@@ -90,7 +90,7 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   ngAfterViewInit(): void {
-    // Focus the first editable cell after the view is initialized
+    // focus on the first cell
     if (
       this.elements.toArray()[0].nativeElement.id ===
       this.getCellId('income', 0, 0, 0)
@@ -99,58 +99,64 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     const table = this.editableTable.nativeElement;
-
-    // Add keyboard navigation event listener
     table.addEventListener('keydown', (e) => this.onKeyDown(e));
     this.syncScrollToLeft();
   }
 
   private handleDisplayYear(): void {
-    this.date.selectedYear$.pipe(
-      tap((year) => {
-        this.currentYear = year.toString();
-        this.months.set(
-          [...MonthPattern].map((month) => `${month} ${this.currentYear}`)
-        );
-      }),
-      takeUntil(this.destroy$),
-    ).subscribe();
+    this.date.selectedYear$
+      .pipe(
+        tap((year) => {
+          this.currentYear = year.toString();
+          this.months.set(
+            [...MonthPattern].map((month) => `${month} ${this.currentYear}`)
+          );
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe();
   }
 
   private handleDisplayNumberOfMonths(): void {
-    this.date.numberOfMonths$.pipe(
-      tap((numberOfMonths) => {
-        this.months.set(
-          [...MonthPattern].slice(0, numberOfMonths).map((month) => `${month} ${this.currentYear}`)
-        );
+    this.date.numberOfMonths$
+      .pipe(
+        tap((numberOfMonths) => {
+          // updated months
+          this.months.set(
+            [...MonthPattern]
+              .slice(0, numberOfMonths)
+              .map((month) => `${month} ${this.currentYear}`)
+          );
 
-        const updatedBudgetTotal = [...this.budgetTotal()];
-        this.updateBudgetTotalList(updatedBudgetTotal, numberOfMonths);
-        this.budgetTotal.set(updatedBudgetTotal);
+          // updated budget total
+          const updatedBudgetTotal = [...this.budgetTotal()];
+          this.updateBudgetTotalList(updatedBudgetTotal, numberOfMonths);
+          this.budgetTotal.set(updatedBudgetTotal);
 
-        const updatedBudgetData = [...this.budget()];
+          // updated budget
+          const updatedBudgetData = [...this.budget()];
+          for (const budget of updatedBudgetData) {
+            if (budget.total) {
+              this.updateBudgetTotalList(budget.total, numberOfMonths);
+            }
 
-        for (const budget of updatedBudgetData) {
-          if (budget.total) {
-            this.updateBudgetTotalList(budget.total, numberOfMonths);
+            if (!budget.list) continue;
+            for (let i = 0; i < budget.list.length; i++) {
+              const subCategory = budget.list[i];
+
+              if (!subCategory.list) continue;
+              subCategory.list = this.updateBudgetList(
+                subCategory.list,
+                numberOfMonths
+              );
+            }
           }
 
-          if (!budget.list) continue;
-
-          for (let i = 0; i < budget.list.length; i++) {
-            const subCategory = budget.list[i];
-
-            if (!subCategory.list) continue;
-            subCategory.list = this.updateBudgetList(subCategory.list, numberOfMonths);
-          }
-        }
-
-        this.calculateSum(0);
-        console.log(this.budget());
-        
-      }),
-      takeUntil(this.destroy$),
-    ).subscribe();
+          this.calculateSum(0);
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe();
   }
 
   private updateBudgetList(initArray: BudgetData[], num: number): BudgetData[] {
@@ -172,7 +178,7 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
         order: +num,
         value: 0,
         editable: true,
-      } as BudgetData); // Add the picked number at the end
+      } as BudgetData); // added selected number
       return newArray;
     }
   }
@@ -188,7 +194,7 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
         newArray.push(0);
       }
 
-      newArray.push(+num); // Add the picked number at the end
+      newArray.push(+num); // added selected number
       return newArray;
     }
   }
@@ -199,6 +205,7 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
     subCategoryIndex?: number,
     cellIndex?: number
   ): string {
+    // get cell id
     return `${type || this.type}-p${categoryIndex || 0}-s${
       subCategoryIndex || 0
     }-i${cellIndex || 0}`;
@@ -249,12 +256,15 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   applyToAll(): void {
+    // close context menu
     this.showContextMenu = false;
 
+    // get the cell value
     const updatedData = [...this.budget()];
     const list = updatedData[this.currentRow].list![this.currentCol].list;
     const currentCellValue = list![this.currentCellIndex].value;
 
+    // set the value to all cells in the column
     for (let i = 0; i < this.months().length; i++) {
       updatedData[this.currentRow].list![this.currentCol].list![i].value =
         currentCellValue;
@@ -277,6 +287,7 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
       }
     }
 
+    // update the budget data
     this.budget.set(updatedData);
     this.calculateSum(this.currentRow);
   }
@@ -285,12 +296,14 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
     const table = this.editableTable.nativeElement;
     this.currentCell = e.target as HTMLTableCellElement;
 
+    // return if the current not found
     if (this.currentCell.tagName.toLowerCase() !== 'td') return;
 
     const row = this.currentCell.parentElement as HTMLTableRowElement;
     const colIndex = Array.from(row.children).indexOf(this.currentCell);
     const rowIndex = Array.from(table.rows).indexOf(row);
 
+    // set the current cell
     switch (e.key) {
       case 'ArrowRight':
         this.navigateCell(rowIndex, colIndex + 1);
@@ -318,17 +331,17 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   insertLineBreak(): void {
-    if (this.currentCell) {
-      const selection = window.getSelection();
-      if (selection && selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0);
-        const br = document.createElement('br');
-        range.deleteContents();
-        range.insertNode(br);
-        range.setStartAfter(br);
-        selection.removeAllRanges();
-        selection.addRange(range);
-      }
+    if (!this.currentCell) return
+
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      const br = document.createElement('br');
+      range.deleteContents();
+      range.insertNode(br);
+      range.setStartAfter(br);
+      selection.removeAllRanges();
+      selection.addRange(range);
     }
   }
 
@@ -360,7 +373,7 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
       )
     );
 
-    // Set the initial value of budget to the generated default data
+    // set the budget total to 0
     this.calculateSum(0);
   }
 
@@ -419,15 +432,19 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
     cellIndex: number,
     event: FocusEvent
   ): void {
+    // close context menu
     this.showContextMenu = false;
+
+    // get the cell value
     const textContent = (event.target as HTMLTableCellElement).innerText
       .trim()
       .replace(/\n/g, '');
 
     if (textContent) {
       const value = isNaN(+textContent) ? 0 : +textContent;
-
       const updatedData = [...this.budget()];
+
+      // update the cell value
       updatedData[categoryIndex].list![subCategoryIndex].list![
         cellIndex
       ].value = value;
@@ -435,6 +452,7 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
 
       (event.target as HTMLTableCellElement).innerText = '' + value;
 
+      // update the cell value in the list
       this.calculateSum(categoryIndex);
     }
   }
@@ -443,6 +461,7 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
     const textContent = (event.target as HTMLTableCellElement).innerText
       .trim()
       .replace(/\n/g, '');
+
     if (textContent) {
       const updatedData = [...this.budget()];
       updatedData[categoryIndex].category = textContent;
@@ -460,6 +479,7 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
     const textContent = (event.target as HTMLTableCellElement).innerText
       .trim()
       .replace(/\n/g, '');
+
     if (textContent) {
       const updatedData = [...this.budget()];
       updatedData[categoryIndex].list![subCategoryIndex].category = textContent;
@@ -471,8 +491,7 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
 
   handleEnterAddParent(event: KeyboardEvent): void {
     if (event.key !== 'Enter') return;
-    event.preventDefault(); // Prevent the default action (e.g., form submission)
-
+    event.preventDefault();
     this.handleAddParent();
   }
 
@@ -484,30 +503,29 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
         updatedData.length
       );
 
-      // Add the new row to the list
+      // added the new row to the list
       updatedData.push(...newRow);
       this.budget.set(updatedData);
       this.calculateSum(updatedData.length - 1);
     }
   }
 
-  // Handle Enter key to add new row
   handleEnterAddSub(event: KeyboardEvent, parentIndex: number): void {
     if (event.key !== 'Enter') return;
-    event.preventDefault(); // Prevent the default action (e.g., form submission)
-
+    event.preventDefault();
     this.handleAddSub(parentIndex);
   }
 
   handleAddSub(parentIndex: number): void {
     const updatedData = [...this.budget()];
+
     if (updatedData[parentIndex]?.list) {
       const newRow = this.generateDefaultBudgetSubData(
         this.generateDefaulListBudgetData(),
         updatedData[parentIndex].list!.length
       );
 
-      // Add the new row to the list
+      // added the new row to the list
       updatedData[parentIndex].list!.push(...newRow);
       this.budget.set(updatedData);
       this.calculateSum(parentIndex);
@@ -517,6 +535,7 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
   handleRemoveSub(categoryIndex: number, subCategoryIndex: number): void {
     const updatedData = [...this.budget()];
     const parent = updatedData[categoryIndex];
+
     if (parent.list) {
       parent.list.splice(subCategoryIndex, 1);
       this.calculateSum(categoryIndex);
@@ -529,13 +548,13 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
     subCategoryIndex: number
   ): void {
     if ($event.key !== 'Enter') return;
-    $event.preventDefault(); // Prevent the default action (e.g., form submission)
-
+    $event.preventDefault();
     this.handleRemoveSub(categoryIndex, subCategoryIndex);
   }
 
   handleRemoveParent(categoryIndex: number): void {
     const updatedData = [...this.budget()];
+
     if (updatedData) {
       updatedData.splice(categoryIndex, 1);
       this.budget.set(updatedData);
@@ -545,20 +564,17 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
 
   handleEnterRemoveParent($event: KeyboardEvent, categoryIndex: number): void {
     if ($event.key !== 'Enter') return;
-    $event.preventDefault(); // Prevent the default action (e.g., form submission)
-
+    $event.preventDefault();
     this.handleRemoveParent(categoryIndex);
   }
 
-  // Calculate the sum of each index across all subcategories
   calculateSum(categoryIndex: number): void {
     const data = [...this.budget()];
     if (!data) return;
 
-    // Initialize an array with zeros for each column (12 months)
+    // init an array with 0 for each column (12 months)
     const sumArray = Array(this.months().length).fill(0);
 
-    // Iterate through each subcategory
     const category = data[categoryIndex];
     if (!category) {
       this.calculateFinalTotal();
@@ -567,13 +583,11 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
 
     const list = category.list;
     if (list) {
+      // loop through each subcategory
       for (const subCategory of list) {
-        // Ensure the subCategory has a list
         if (!subCategory.list) continue;
 
-        // Iterate through each index of the subcategory
         for (let i = 0; i < subCategory.list.length; i++) {
-          // Accumulate the value at each index
           sumArray[i] += subCategory.list[i].value;
         }
       }
@@ -581,6 +595,7 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
       category.total = sumArray;
     }
 
+    // update final total
     this.calculateFinalTotal();
   }
 
@@ -588,28 +603,26 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
     const data = [...this.budget()];
     if (!data) return;
 
-    // Initialize an array with zeros for each column (12 months)
     const totalData: number[] = Array(this.months().length).fill(0);
 
+    // loop through each category
     for (const category of data) {
       for (let j = 0; j < this.months().length; j++) {
-        // Sum the values for each month
         totalData[j] += category.total![j];
       }
     }
 
+    // update the budget total
     this.budgetTotal.set(totalData);
     this.updateBalance();
   }
 
   private updateBalance(): void {
-    // Emit the total budget data to the balance service
     const balanceItemData = {
       order: 0,
       type: this.type,
       total: this.budgetTotal(),
     } as BudgetData;
-
     const balance = [...this.balance.balance$.getValue()];
     const balanceItem = balance.find(
       (balanceItem) => balanceItem.type === this.type

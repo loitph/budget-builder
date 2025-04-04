@@ -13,10 +13,13 @@ import { FormsModule } from '@angular/forms';
 export class DateRangeComponent implements OnDestroy {
   private destroy$ = new Subject<void>();
 
-  months =  Array.from({ length: 12 }, (_, i) => i + 1);
-  numberOfMonths = 12;
+  private monthOfYear = 12;
+  private numberOfYears = 84; // from 1942 to 2025
 
-  years = Array.from({ length: 84 }, (_, i) => new Date().getFullYear() - i);
+  months =  Array.from({ length: this.monthOfYear }, (_, i) => i + 1);
+  numberOfMonths = this.monthOfYear;
+
+  years = Array.from({ length: this.numberOfYears }, (_, i) => new Date().getFullYear() - i);
   selectedYear = new Date().getFullYear();
 
   constructor(private date: DateService) { }

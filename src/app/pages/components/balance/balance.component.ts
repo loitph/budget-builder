@@ -1,4 +1,12 @@
-import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, signal, ViewChild } from '@angular/core';
+import {
+  AfterViewInit,
+  Component,
+  ElementRef,
+  OnDestroy,
+  OnInit,
+  signal,
+  ViewChild,
+} from '@angular/core';
 import { MonthPattern } from '../../../shared/constant';
 import { Subject, takeUntil, tap } from 'rxjs';
 import { ScrollEventService } from '../../../services/scroll-event.service';
@@ -11,13 +19,13 @@ import { DateService } from '../../../services/date.service';
   standalone: true,
   imports: [],
   templateUrl: './balance.component.html',
-  styleUrl: './balance.component.scss'
+  styleUrl: './balance.component.scss',
 })
 export class BalanceComponent implements OnInit, OnDestroy, AfterViewInit {
   private destroy$ = new Subject<void>();
-  
+
   @ViewChild('scrollableTable') scrollableTable!: ElementRef<HTMLDivElement>;
-  
+
   months = signal<string[]>([...MonthPattern]);
   profitNLoss = signal<number[]>([]);
   opening = signal<number[]>(Array(this.months().length).fill(0));
@@ -26,8 +34,8 @@ export class BalanceComponent implements OnInit, OnDestroy, AfterViewInit {
   constructor(
     private scrollEvent: ScrollEventService,
     private balance: BalanceService,
-    private date: DateService,
-  ) { }
+    private date: DateService
+  ) {}
 
   ngOnInit(): void {
     this.handleBalanceData();
@@ -49,47 +57,65 @@ export class BalanceComponent implements OnInit, OnDestroy, AfterViewInit {
         newArray.push(0);
       }
 
-      newArray.push(+num); // Add the picked number at the end
+      newArray.push(+num); // added selected number
       return newArray;
     }
   }
 
   private handleDisplayNumberOfMonths(): void {
-    this.date.numberOfMonths$.pipe(
-      tap((numberOfMonths) => {
-        this.months.set(
-          [...MonthPattern].slice(0, numberOfMonths).map((month) => `${month}`)
-        );
+    this.date.numberOfMonths$
+      .pipe(
+        tap((numberOfMonths) => {
+          // updated months
+          this.months.set(
+            [...MonthPattern]
+              .slice(0, numberOfMonths)
+              .map((month) => `${month}`)
+          );
 
-        const updatedPNL = [...this.profitNLoss()];
-        const updatedOpening = [...this.opening()];
-        const updatedClosing = [...this.closing()];
-        this.profitNLoss.set(this.updateTotalList(updatedPNL, numberOfMonths));
-        this.opening.set(this.updateTotalList(updatedOpening, numberOfMonths));
-        this.closing.set(this.updateTotalList(updatedClosing, numberOfMonths));
-      }),
-      takeUntil(this.destroy$),
-    ).subscribe();
+          // updated pnl, opening, and closing
+          const updatedPNL = [...this.profitNLoss()];
+          const updatedOpening = [...this.opening()];
+          const updatedClosing = [...this.closing()];
+          this.profitNLoss.set(
+            this.updateTotalList(updatedPNL, numberOfMonths)
+          );
+          this.opening.set(
+            this.updateTotalList(updatedOpening, numberOfMonths)
+          );
+          this.closing.set(
+            this.updateTotalList(updatedClosing, numberOfMonths)
+          );
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe();
   }
 
   private handleBalanceData(): void {
-    this.balance.balance$.pipe(
-      tap(data => {
-        this.updateProfitNLoss(data);
-        this.updateOpenNClose();
-      }),
-      takeUntil(this.destroy$),
-    ).subscribe();
+    this.balance.balance$
+      .pipe(
+        tap((data) => {
+          this.updateProfitNLoss(data);
+          this.updateOpenNClose();
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe();
   }
 
   private updateProfitNLoss(balanceData: BudgetData[]): void {
-    const totalIncome = balanceData.find(item => item.type === 'income')?.total || [];
-    const totalExpense = balanceData.find(item => item.type === 'expense')?.total || [];
+    const totalIncome =
+      balanceData.find((item) => item.type === 'income')?.total || [];
+    const totalExpense =
+      balanceData.find((item) => item.type === 'expense')?.total || [];
 
     if (totalIncome.length === 0 || totalExpense.length === 0) {
       this.profitNLoss.set(Array(this.months().length).fill(0));
     } else {
-      this.profitNLoss.set(totalIncome.map((num, index) => num - totalExpense[index]));
+      this.profitNLoss.set(
+        totalIncome.map((num, index) => num - totalExpense[index])
+      );
     }
   }
 
@@ -98,18 +124,20 @@ export class BalanceComponent implements OnInit, OnDestroy, AfterViewInit {
     let opening = [...this.opening()];
     let closing = [...this.closing()];
 
+    // init opening balance
     opening = [0];
 
     for (let i = 0; i < profitLoss.length; i++) {
-      // Calculate closing balance for the current month
+      // calculated closing balance
       closing[i] = opening[i] + profitLoss[i];
-    
-      // Calculate opening balance for the next month if not the last one
+
+      // calculated opening balance for next month
       if (i < profitLoss.length - 1) {
         opening[i + 1] = closing[i];
       }
     }
 
+    // set data
     this.opening.set(opening);
     this.closing.set(closing);
   }
@@ -120,10 +148,15 @@ export class BalanceComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private syncScrollToLeft(): void {
-    this.scrollEvent.scrollPosition$.pipe(
-      tap(scrollLeft => this.scrollableTable.nativeElement.scrollLeft = scrollLeft),
-      takeUntil(this.destroy$)
-    ).subscribe();
+    this.scrollEvent.scrollPosition$
+      .pipe(
+        tap(
+          (scrollLeft) =>
+            (this.scrollableTable.nativeElement.scrollLeft = scrollLeft)
+        ),
+        takeUntil(this.destroy$)
+      )
+      .subscribe();
   }
 
   ngOnDestroy(): void {

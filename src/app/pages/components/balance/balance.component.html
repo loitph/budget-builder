@@ -1,29 +1,25 @@
 <div class="flex flex-col">
-  <div
-    #scrollableTable
-    class="overflow-auto max-w-full bg-white"
-    (scroll)="syncScroll($event)"
-  >
+  <div #scrollableTable class="overflow-auto max-w-full bg-white" (scroll)="syncScroll($event)">
     <table class="min-w-full border-collapse">
       <tbody>
         <tr class="border-t-4 border-solid">
           <th class="tbl-col-freeze-left tbl-cell">Profit / Loss</th>
           @for (pnlVal of profitNLoss(); track $index) {
-            <td class="tbl-cell bg-slate-400">{{ pnlVal }}</td>
+          <td class="tbl-cell bg-slate-400">{{ pnlVal }}</td>
           }
           <td class="tbl-col-freeze-right tbl-cell"></td>
         </tr>
         <tr>
           <th class="tbl-col-freeze-left tbl-cell">Opening Balance</th>
           @for (openVal of opening(); track $index) {
-            <td class="tbl-cell bg-slate-400">{{ openVal }}</td>
+          <td class="tbl-cell bg-slate-400">{{ openVal }}</td>
           }
           <td class="tbl-col-freeze-right tbl-cell"></td>
         </tr>
         <tr class="border-b-4 border-solid">
           <th class="tbl-col-freeze-left tbl-cell">Closing Balance</th>
           @for (closeVal of closing(); track $index) {
-            <td class="tbl-cell bg-slate-400">{{ closeVal }}</td>
+          <td class="tbl-cell bg-slate-400">{{ closeVal }}</td>
           }
           <td class="tbl-col-freeze-right tbl-cell"></td>
         </tr>
