@@ -1,0 +1,26 @@
+<div class="flex pb-4 gap-2">
+  <div class="flex gap-2">
+    <p>Number of months: </p>
+    <select
+      class="bg-primary outline-none"
+      [(ngModel)]="numberOfMonths"
+      (change)="selectNumberOfMonths()"
+    >
+      @for (monthNumber of months; track $index) {
+      <option [value]="monthNumber">{{ monthNumber }}</option>
+      }
+    </select>
+  </div>
+  <div class="flex gap-2">
+    <p>Year: </p>
+    <select
+      class="bg-primary outline-none"
+      [(ngModel)]="selectedYear"
+      (change)="selectYears()"
+    >
+      @for (year of years; track $index) {
+      <option [value]="year">{{ year }}</option>
+      }
+    </select>
+  </div>
+</div>

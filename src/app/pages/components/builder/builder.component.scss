@@ -1,0 +1,8 @@
+.context-menu {
+  @apply absolute bg-white border border-gray-300 rounded shadow-lg z-50 p-4 hover:bg-slate-600 hover:text-primary select-none cursor-pointer outline-none;
+}
+
+td[contenteditable="true"]:focus {
+  outline: 2px solid;
+  outline-offset: -2px;
+}

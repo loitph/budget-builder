@@ -1,0 +1,11 @@
+<div class="dashboard-container">
+  <app-page-header
+    [header]="header"
+  ></app-page-header>
+  <div class="section stable-gutter">
+    <app-date-range></app-date-range>
+    <app-builder [title]="'Income'" [type]="'income'"></app-builder>
+    <app-builder [title]="'Expense'" [type]="'expense'" [showMonths]="false"></app-builder>
+    <app-balance></app-balance>
+  </div>
+</div>
