@@ -1,26 +1,54 @@
-import { AfterViewInit, Component, ElementRef, Input, OnDestroy, OnInit, signal, ViewChild } from '@angular/core';
-import { delay, of, Subject, switchMap, takeUntil, tap } from 'rxjs';
+import {
+  AfterViewInit,
+  ChangeDetectorRef,
+  Component,
+  ElementRef,
+  Input,
+  OnDestroy,
+  OnInit,
+  QueryList,
+  signal,
+  ViewChild,
+  ViewChildren,
+} from '@angular/core';
+import {
+  BehaviorSubject,
+  delay,
+  of,
+  Subject,
+  switchMap,
+  takeUntil,
+  tap,
+} from 'rxjs';
 import { BudgetData } from '../../../models/budget.model';
+import { ScrollEventService } from '../../../services/scroll-event.service';
+import { MonthPattern } from '../../../shared/constant';
+import { BalanceService } from '../../../services/balance.service';
+import { FormsModule } from '@angular/forms';
+import { DateService } from '../../../services/date.service';
 
 @Component({
   selector: 'app-builder',
   standalone: true,
-  imports: [],
+  imports: [FormsModule],
   templateUrl: './builder.component.html',
-  styleUrl: './builder.component.scss'
+  styleUrl: './builder.component.scss',
 })
 export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
   private destroy$ = new Subject<void>();
 
-  @Input() title: string = '';
-
   @ViewChild('editableTable') editableTable!: ElementRef<HTMLTableElement>;
+  @ViewChild('scrollableTable') scrollableTable!: ElementRef<HTMLDivElement>;
+  @ViewChildren('tblCellValue') elements!: QueryList<ElementRef>;
+
+  @Input() title: string = '';
+  @Input() type: 'income' | 'expense' = 'income';
+  @Input() showMonths: boolean = true;
+
   currentCell: HTMLTableCellElement | null = null;
 
-  header = 'Budget Builder';
-  monthDefault = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  months = signal<string[]>(this.monthDefault);
-  currentYear = '2025';
+  months = signal<string[]>([...MonthPattern]);
+  currentYear = new Date().getFullYear().toString();
 
   private defaultCategoryLabel = 'New Category';
   private defaultSubCategoryLabel = 'New Sub Category';
@@ -28,24 +56,232 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
   budget = signal<BudgetData[]>([]);
   budgetTotal = signal<number[]>([]);
 
-  constructor() {}
+  private _showContextMenu$ = new BehaviorSubject<boolean>(false);
+  readonly showContextMenu$ = this._showContextMenu$.asObservable();
+
+  get showContextMenu(): boolean {
+    return this._showContextMenu$.getValue();
+  }
+
+  set showContextMenu(value: boolean) {
+    this._showContextMenu$.next(value);
+  }
+
+  contextMenuVisible = false;
+  contextMenuX = 0;
+  contextMenuY = 0;
+  currentRow = 0;
+  currentCol = 0;
+  currentCellIndex = 0;
+  currentType = 'income';
+
+  constructor(
+    private scrollEvent: ScrollEventService,
+    private balance: BalanceService,
+    private date: DateService,
+  ) {}
 
   ngOnInit(): void {
     this.initBudgetData();
     this.initMonthData();
+    this.handleShowContextMenuData();
+    this.handleDisplayYear();
+    this.handleDisplayNumberOfMonths();
   }
 
   ngAfterViewInit(): void {
     // Focus the first editable cell after the view is initialized
-    (document.querySelector(".tbl-cell-value") as HTMLTableCellElement)?.focus();
+    if (
+      this.elements.toArray()[0].nativeElement.id ===
+      this.getCellId('income', 0, 0, 0)
+    ) {
+      this.elements.toArray()[0].nativeElement.focus();
+    }
 
     const table = this.editableTable.nativeElement;
 
     // Add keyboard navigation event listener
     table.addEventListener('keydown', (e) => this.onKeyDown(e));
+    this.syncScrollToLeft();
   }
 
-  onKeyDown(e: KeyboardEvent): void {
+  private handleDisplayYear(): void {
+    this.date.selectedYear$.pipe(
+      tap((year) => {
+        this.currentYear = year.toString();
+        this.months.set(
+          [...MonthPattern].map((month) => `${month} ${this.currentYear}`)
+        );
+      }),
+      takeUntil(this.destroy$),
+    ).subscribe();
+  }
+
+  private handleDisplayNumberOfMonths(): void {
+    this.date.numberOfMonths$.pipe(
+      tap((numberOfMonths) => {
+        this.months.set(
+          [...MonthPattern].slice(0, numberOfMonths).map((month) => `${month} ${this.currentYear}`)
+        );
+
+        const updatedBudgetTotal = [...this.budgetTotal()];
+        this.updateBudgetTotalList(updatedBudgetTotal, numberOfMonths);
+        this.budgetTotal.set(updatedBudgetTotal);
+
+        const updatedBudgetData = [...this.budget()];
+
+        for (const budget of updatedBudgetData) {
+          if (budget.total) {
+            this.updateBudgetTotalList(budget.total, numberOfMonths);
+          }
+
+          if (!budget.list) continue;
+
+          for (let i = 0; i < budget.list.length; i++) {
+            const subCategory = budget.list[i];
+
+            if (!subCategory.list) continue;
+            subCategory.list = this.updateBudgetList(subCategory.list, numberOfMonths);
+          }
+        }
+
+        this.calculateSum(0);
+        console.log(this.budget());
+        
+      }),
+      takeUntil(this.destroy$),
+    ).subscribe();
+  }
+
+  private updateBudgetList(initArray: BudgetData[], num: number): BudgetData[] {
+    const length = initArray.length;
+
+    if (num <= length) {
+      return initArray.slice(0, num);
+    } else {
+      const newArray = [...initArray];
+      for (let i = length + 1; i < num; i++) {
+        newArray.push({
+          order: i,
+          value: 0,
+          editable: true,
+        } as BudgetData);
+      }
+
+      newArray.push({
+        order: +num,
+        value: 0,
+        editable: true,
+      } as BudgetData); // Add the picked number at the end
+      return newArray;
+    }
+  }
+
+  private updateBudgetTotalList(initArray: number[], num: number): number[] {
+    const length = initArray.length;
+
+    if (num <= length) {
+      return initArray.slice(0, num);
+    } else {
+      const newArray = [...initArray];
+      for (let i = length + 1; i < num; i++) {
+        newArray.push(0);
+      }
+
+      newArray.push(+num); // Add the picked number at the end
+      return newArray;
+    }
+  }
+
+  private getCellId(
+    type?: string,
+    categoryIndex?: number,
+    subCategoryIndex?: number,
+    cellIndex?: number
+  ): string {
+    return `${type || this.type}-p${categoryIndex || 0}-s${
+      subCategoryIndex || 0
+    }-i${cellIndex || 0}`;
+  }
+
+  syncScroll(e: Event): void {
+    const target = e.target as HTMLElement;
+    this.scrollEvent.scrollPosition$.next(target.scrollLeft);
+  }
+
+  private syncScrollToLeft(): void {
+    this.scrollEvent.scrollPosition$
+      .pipe(
+        tap(
+          (scrollLeft) =>
+            (this.scrollableTable.nativeElement.scrollLeft = scrollLeft)
+        ),
+        takeUntil(this.destroy$)
+      )
+      .subscribe();
+  }
+
+  private handleShowContextMenuData(): void {
+    this.showContextMenu$
+      .pipe(
+        switchMap((res) => of(res).pipe(delay(100))),
+        tap((res) => (this.contextMenuVisible = res)),
+        takeUntil(this.destroy$)
+      )
+      .subscribe();
+  }
+
+  onRightClick(
+    event: MouseEvent,
+    type: string,
+    row: number,
+    col: number,
+    cellIndex: number
+  ): void {
+    event.preventDefault();
+    this.currentType = type;
+    this.currentRow = row;
+    this.currentCol = col;
+    this.currentCellIndex = cellIndex;
+    this.showContextMenu = true;
+    this.contextMenuX = event.clientX;
+    this.contextMenuY = event.clientY;
+  }
+
+  applyToAll(): void {
+    this.showContextMenu = false;
+
+    const updatedData = [...this.budget()];
+    const list = updatedData[this.currentRow].list![this.currentCol].list;
+    const currentCellValue = list![this.currentCellIndex].value;
+
+    for (let i = 0; i < this.months().length; i++) {
+      updatedData[this.currentRow].list![this.currentCol].list![i].value =
+        currentCellValue;
+
+      const el = this.elements
+        .toArray()
+        .find(
+          (el) =>
+            el.nativeElement.id ===
+            this.getCellId(
+              this.currentType,
+              this.currentRow,
+              this.currentCol,
+              i
+            )
+        );
+
+      if (el && currentCellValue !== undefined) {
+        el.nativeElement.innerText = currentCellValue.toString();
+      }
+    }
+
+    this.budget.set(updatedData);
+    this.calculateSum(this.currentRow);
+  }
+
+  private onKeyDown(e: KeyboardEvent): void {
     const table = this.editableTable.nativeElement;
     this.currentCell = e.target as HTMLTableCellElement;
 
@@ -113,18 +349,14 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
     updatedData.splice(
       rowIndex + 1,
       0,
-      ...this.generateDefaultBudgetSubData(
-        this.generateDefaulListBudgetData()
-      )
+      ...this.generateDefaultBudgetSubData(this.generateDefaulListBudgetData())
     );
   }
 
   private initBudgetData(): void {
     this.budget.set(
       this.generateDefaultBudgetData(
-        this.generateDefaultBudgetSubData(
-          this.generateDefaulListBudgetData()
-        )
+        this.generateDefaultBudgetSubData(this.generateDefaulListBudgetData())
       )
     );
 
@@ -132,7 +364,10 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
     this.calculateSum(0);
   }
 
-  private generateDefaultBudgetData(newList?: BudgetData[], newOrder?: number): BudgetData[] {
+  private generateDefaultBudgetData(
+    newList?: BudgetData[],
+    newOrder?: number
+  ): BudgetData[] {
     return [
       {
         order: newOrder || 0,
@@ -143,7 +378,10 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
     ];
   }
 
-  private generateDefaultBudgetSubData(newList?: BudgetData[], newOrder?: number): BudgetData[] {
+  private generateDefaultBudgetSubData(
+    newList?: BudgetData[],
+    newOrder?: number
+  ): BudgetData[] {
     return [
       {
         order: newOrder || 0,
@@ -162,7 +400,7 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
       result.push({
         order: i,
         value: 0,
-        editable: true
+        editable: true,
       });
     }
 
@@ -171,7 +409,7 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private initMonthData(): void {
     this.months.set(
-      this.months().map(month => `${month} ${this.currentYear}`)
+      this.months().map((month) => `${month} ${this.currentYear}`)
     );
   }
 
@@ -181,14 +419,18 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
     cellIndex: number,
     event: FocusEvent
   ): void {
-    const textContent = (event.target as HTMLTableCellElement).innerText.trim().replace(/\n/g, '');;
-    
+    this.showContextMenu = false;
+    const textContent = (event.target as HTMLTableCellElement).innerText
+      .trim()
+      .replace(/\n/g, '');
+
     if (textContent) {
       const value = isNaN(+textContent) ? 0 : +textContent;
 
       const updatedData = [...this.budget()];
-      updatedData[categoryIndex].list![subCategoryIndex].list![cellIndex].value =
-        value;
+      updatedData[categoryIndex].list![subCategoryIndex].list![
+        cellIndex
+      ].value = value;
       this.budget.set(updatedData);
 
       (event.target as HTMLTableCellElement).innerText = '' + value;
@@ -197,11 +439,10 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
-  updateCategoryCellValue(
-    categoryIndex: number,
-    event: FocusEvent
-  ): void {
-    const textContent = (event.target as HTMLTableCellElement).innerText.trim().replace(/\n/g, '');;
+  updateCategoryCellValue(categoryIndex: number, event: FocusEvent): void {
+    const textContent = (event.target as HTMLTableCellElement).innerText
+      .trim()
+      .replace(/\n/g, '');
     if (textContent) {
       const updatedData = [...this.budget()];
       updatedData[categoryIndex].category = textContent;
@@ -216,7 +457,9 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
     subCategoryIndex: number,
     event: FocusEvent
   ): void {
-    const textContent = (event.target as HTMLTableCellElement).innerText.trim().replace(/\n/g, '');;
+    const textContent = (event.target as HTMLTableCellElement).innerText
+      .trim()
+      .replace(/\n/g, '');
     if (textContent) {
       const updatedData = [...this.budget()];
       updatedData[categoryIndex].list![subCategoryIndex].category = textContent;
@@ -236,11 +479,8 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
   handleAddParent(): void {
     const updatedData = [...this.budget()];
     if (updatedData) {
-
       const newRow = this.generateDefaultBudgetData(
-        this.generateDefaultBudgetSubData(
-          this.generateDefaulListBudgetData()
-        ),
+        this.generateDefaultBudgetSubData(this.generateDefaulListBudgetData()),
         updatedData.length
       );
 
@@ -262,7 +502,6 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
   handleAddSub(parentIndex: number): void {
     const updatedData = [...this.budget()];
     if (updatedData[parentIndex]?.list) {
-
       const newRow = this.generateDefaultBudgetSubData(
         this.generateDefaulListBudgetData(),
         updatedData[parentIndex].list!.length
@@ -284,6 +523,17 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
+  handleEnterRemoveSub(
+    $event: KeyboardEvent,
+    categoryIndex: number,
+    subCategoryIndex: number
+  ): void {
+    if ($event.key !== 'Enter') return;
+    $event.preventDefault(); // Prevent the default action (e.g., form submission)
+
+    this.handleRemoveSub(categoryIndex, subCategoryIndex);
+  }
+
   handleRemoveParent(categoryIndex: number): void {
     const updatedData = [...this.budget()];
     if (updatedData) {
@@ -293,23 +543,11 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
-  setCursorAtEnd(inputElement: any): void {
-    of(null).pipe(
-      switchMap(res => of(res).pipe(delay(0))),
-      tap(() => {
-        const cell = inputElement.target as HTMLElement;
-        const range = document.createRange();
-        const selection = window.getSelection();
+  handleEnterRemoveParent($event: KeyboardEvent, categoryIndex: number): void {
+    if ($event.key !== 'Enter') return;
+    $event.preventDefault(); // Prevent the default action (e.g., form submission)
 
-        if (selection) {
-          range.selectNodeContents(cell);
-          range.collapse(false);  // Move the cursor to the end
-          selection.removeAllRanges();
-          selection.addRange(range);
-        }
-      }),
-      takeUntil(this.destroy$)
-    ).subscribe();
+    this.handleRemoveParent(categoryIndex);
   }
 
   // Calculate the sum of each index across all subcategories
@@ -351,7 +589,7 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
     if (!data) return;
 
     // Initialize an array with zeros for each column (12 months)
-    const totalData = Array(this.months().length).fill(0);
+    const totalData: number[] = Array(this.months().length).fill(0);
 
     for (const category of data) {
       for (let j = 0; j < this.months().length; j++) {
@@ -361,6 +599,29 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     this.budgetTotal.set(totalData);
+    this.updateBalance();
+  }
+
+  private updateBalance(): void {
+    // Emit the total budget data to the balance service
+    const balanceItemData = {
+      order: 0,
+      type: this.type,
+      total: this.budgetTotal(),
+    } as BudgetData;
+
+    const balance = [...this.balance.balance$.getValue()];
+    const balanceItem = balance.find(
+      (balanceItem) => balanceItem.type === this.type
+    );
+
+    if (!balanceItem) {
+      balance.push(balanceItemData);
+    } else {
+      balanceItem.total = this.budgetTotal();
+    }
+
+    this.balance.balance$.next(balance);
   }
 
   ngOnDestroy(): void {

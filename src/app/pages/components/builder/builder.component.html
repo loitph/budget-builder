@@ -1,88 +1,103 @@
-<div class="flex flex-col gap-4">
-  <p>{{ title }}</p>
-
-  <button class="w-24 border-solid border-2">Add {{ title }}</button>
-
-  <div class="overflow-auto max-w-full bg-white">
-    <table class="min-w-full border-collapse" #editableTable id="editableTable">
+<div class="flex flex-col">
+  <div
+    #scrollableTable
+    class="overflow-auto max-w-full bg-white"
+    (scroll)="syncScroll($event)"
+  >
+    <table
+      #editableTable
+      id="editableTable"
+      class="min-w-full border-collapse"
+    >
       <thead>
-        <tr class="border-b-4 border-solid">
-          <th class="tbl-col-freeze-left tbl-cell"></th>
-          @for (month of months(); track $index) {
-          <th class="tbl-cell bg-slate-300">
-            {{month}}
-          </th>
+        <tr class="border-b-4 border-t-4 border-solid">
+          <th class="tbl-col-freeze-left tbl-cell">{{ title }}</th>
+          @if (showMonths) {
+            @for (month of months(); track $index) {
+              <th class="tbl-cell bg-slate-300">
+                {{ month }}
+              </th>
+            }
+            <th class="tbl-col-freeze-right tbl-cell"></th>
+          } @else {
+            <th class="tbl-cell bg-slate-300" [colSpan]="months().length + 1"></th>
           }
-          <th class="tbl-col-freeze-right tbl-cell"></th>
         </tr>
       </thead>
       <tbody>
-        @for (incomeItem of budget(); track incomeItem; let incomeItemIdx = $index) {
+        @for (budgetItem of budget(); track budgetItem.order; let budgetItemIdx = $index) {
           <tr class="outline-2 -outline-offset-2 outline-black">
             <td
               class="tbl-col-freeze-left tbl-cell"
-              [contentEditable]="incomeItem.editable"
-              (focus)="setCursorAtEnd($event)"
-              (blur)="updateCategoryCellValue(incomeItemIdx, $event)"
+              tabindex="0"
+              [contentEditable]="budgetItem.editable"
+              (blur)="updateCategoryCellValue(budgetItemIdx, $event)"
               (keydown)="handleEnterAddParent($event)"
             >
-              {{ incomeItem.category }}
+              {{ budgetItem.category }}
             </td>
             <td class="tbl-cell bg-slate-300" [colSpan]="months().length"></td>
-            <td
-              class="tbl-col-freeze-right tbl-cell"
-              (click)="handleRemoveParent(incomeItemIdx)"
+            <th
+              class="tbl-col-freeze-right tbl-cell tbl-cell-btn"
+              tabindex="0"
+              (click)="handleRemoveParent(budgetItemIdx)"
+              (keydown)="handleEnterRemoveParent($event, budgetItemIdx)"
             >
-              delete
-            </td>
+              Delete
+            </th>
           </tr>
-          @for (subIncomeItem of incomeItem.list; track subIncomeItem; let subIncomeItemIdx = $index) {
+          @for (subBudgetItem of budgetItem.list; track subBudgetItemIdx; let subBudgetItemIdx = $index) {
             <tr>
               <td
                 class="tbl-col-freeze-left tbl-cell"
-                [contentEditable]="incomeItem.editable"
-                (focus)="setCursorAtEnd($event)"
-                (blur)="updateSubCategoryCellValue(incomeItemIdx, subIncomeItemIdx, $event)"
-                (keydown)="handleEnterAddSub($event, incomeItemIdx)"
+                tabindex="0"
+                [contentEditable]="budgetItem.editable"
+                (blur)="updateSubCategoryCellValue(budgetItemIdx, subBudgetItemIdx, $event)"
+                (keydown)="handleEnterAddSub($event, budgetItemIdx)"
               >
-                {{subIncomeItem.category}}
+                {{subBudgetItem.category}}
               </td>
-              @for (itemIncomeVal of subIncomeItem.list; track itemIncomeVal; let itemIncomeValIdx = $index) {
+              @for (itemBudgetVal of subBudgetItem.list; track itemBudgetVal.order; let itemBudgetValIdx = $index) {
                 <td
+                  [id]="type + '-p' + budgetItemIdx + '-s' + subBudgetItemIdx + '-i' + itemBudgetValIdx"
                   class="tbl-cell bg-slate-100 tbl-cell-value"
                   tabindex="0"
-                  [contentEditable]="itemIncomeVal.editable"
-                  (focus)="setCursorAtEnd($event)"
-                  (blur)="updateCellValue(incomeItemIdx, subIncomeItemIdx, itemIncomeValIdx, $event)"
-                  (keydown)="handleEnterAddSub($event, incomeItemIdx)"
+                  #tblCellValue
+                  [contentEditable]="itemBudgetVal.editable"
+                  (blur)="updateCellValue(budgetItemIdx, subBudgetItemIdx, itemBudgetValIdx, $event)"
+                  (keydown)="handleEnterAddSub($event, budgetItemIdx)"
+                  (contextmenu)="onRightClick($event, type, budgetItemIdx, subBudgetItemIdx, itemBudgetValIdx)"
                 >
-                  {{ itemIncomeVal.value }}
+                  {{ itemBudgetVal.value }}
                 </td>
               }
-              <td
-                class="tbl-col-freeze-right tbl-cell"
-                (click)="handleRemoveSub(incomeItemIdx, subIncomeItemIdx )"
+              <th
+                class="tbl-col-freeze-right tbl-cell tbl-cell-btn"
+                tabindex="0"
+                (click)="handleRemoveSub(budgetItemIdx, subBudgetItemIdx)"
+                (keydown)="handleEnterRemoveSub($event, budgetItemIdx, subBudgetItemIdx)"
               >
-                delete
-              </td>
+                Delete
+              </th>
             </tr>
           }
 
           <tr>
             <td
-              class="tbl-col-freeze-left tbl-cell"
-              (click)="handleAddSub(incomeItemIdx)"
+              class="tbl-col-freeze-left tbl-cell font-semibold tbl-cell-btn"
+              tabindex="0"
+              (click)="handleAddSub(budgetItemIdx)"
+              (keydown)="handleEnterAddSub($event, budgetItemIdx)"
             >
-            Add new {{ incomeItem.category }} Category
+              Add new {{ budgetItem.category }} Category
             </td>
             <td class="tbl-cell bg-slate-300" [colSpan]="months().length + 1"></td>
-            
           </tr>
           <tr class="border-b-4 border-solid">
-            <td class="tbl-col-freeze-left tbl-cell">Sub totals</td>
-            @for (itemVal of incomeItem.total; track itemVal; let itemValIdx = $index) {
+            <td class="tbl-col-freeze-left tbl-cell font-semibold">Sub totals</td>
+            @for (itemVal of budgetItem.total; track itemValIdx; let itemValIdx = $index) {
               <td
-                class="tbl-cell bg-slate-100 tbl-cell-value"
+                class="tbl-cell bg-slate-400 tbl-cell-value"
               >
                 {{ itemVal }}
               </td>
@@ -92,20 +107,22 @@
         }
         <tr>
           <td
-            class="tbl-col-freeze-left tbl-cell"
+            class="tbl-col-freeze-left tbl-cell font-semibold tbl-cell-btn"
+            tabindex="0"
             (click)="handleAddParent()"
+            (keydown)="handleEnterAddParent($event)"
           >
             Add New {{ title }} Category
           </td>
           <td class="tbl-cell bg-slate-300" [colSpan]="months().length + 1"></td>
         </tr>
         <tr>
-          <td class="tbl-col-freeze-left tbl-cell">{{ title }} total</td>
-          @for (incomeMonthTotalVal of budgetTotal(); track incomeMonthTotalVal; let incomeMonthTotalIdx = $index) {
+          <td class="tbl-col-freeze-left tbl-cell font-semibold">{{ title }} total</td>
+          @for (budgetMonthTotalVal of budgetTotal(); track budgetMonthTotalIdx; let budgetMonthTotalIdx = $index) {
             <td
-              class="tbl-cell bg-slate-100 tbl-cell-value"
+              class="tbl-cell bg-slate-400 tbl-cell-value"
             >
-              {{ incomeMonthTotalVal }}
+              {{ budgetMonthTotalVal }}
             </td>
           }
           <td class="tbl-col-freeze-right tbl-cell"></td>
@@ -114,3 +131,14 @@
     </table>
   </div>
 </div>
+
+@if (contextMenuVisible) {
+  <div
+    class="context-menu"
+    [style.left.px]="contextMenuX"
+    [style.top.px]="contextMenuY"
+    (click)="applyToAll()"
+  >
+    Apply to all
+  </div>
+}
