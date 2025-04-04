@@ -1,0 +1,116 @@
+<div class="flex flex-col gap-4">
+  <p>{{ title }}</p>
+
+  <button class="w-24 border-solid border-2">Add {{ title }}</button>
+
+  <div class="overflow-auto max-w-full bg-white">
+    <table class="min-w-full border-collapse" #editableTable id="editableTable">
+      <thead>
+        <tr class="border-b-4 border-solid">
+          <th class="tbl-col-freeze-left tbl-cell"></th>
+          @for (month of months(); track $index) {
+          <th class="tbl-cell bg-slate-300">
+            {{month}}
+          </th>
+          }
+          <th class="tbl-col-freeze-right tbl-cell"></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (incomeItem of budget(); track incomeItem; let incomeItemIdx = $index) {
+          <tr class="outline-2 -outline-offset-2 outline-black">
+            <td
+              class="tbl-col-freeze-left tbl-cell"
+              [contentEditable]="incomeItem.editable"
+              (focus)="setCursorAtEnd($event)"
+              (blur)="updateCategoryCellValue(incomeItemIdx, $event)"
+              (keydown)="handleEnterAddParent($event)"
+            >
+              {{ incomeItem.category }}
+            </td>
+            <td class="tbl-cell bg-slate-300" [colSpan]="months().length"></td>
+            <td
+              class="tbl-col-freeze-right tbl-cell"
+              (click)="handleRemoveParent(incomeItemIdx)"
+            >
+              delete
+            </td>
+          </tr>
+          @for (subIncomeItem of incomeItem.list; track subIncomeItem; let subIncomeItemIdx = $index) {
+            <tr>
+              <td
+                class="tbl-col-freeze-left tbl-cell"
+                [contentEditable]="incomeItem.editable"
+                (focus)="setCursorAtEnd($event)"
+                (blur)="updateSubCategoryCellValue(incomeItemIdx, subIncomeItemIdx, $event)"
+                (keydown)="handleEnterAddSub($event, incomeItemIdx)"
+              >
+                {{subIncomeItem.category}}
+              </td>
+              @for (itemIncomeVal of subIncomeItem.list; track itemIncomeVal; let itemIncomeValIdx = $index) {
+                <td
+                  class="tbl-cell bg-slate-100 tbl-cell-value"
+                  tabindex="0"
+                  [contentEditable]="itemIncomeVal.editable"
+                  (focus)="setCursorAtEnd($event)"
+                  (blur)="updateCellValue(incomeItemIdx, subIncomeItemIdx, itemIncomeValIdx, $event)"
+                  (keydown)="handleEnterAddSub($event, incomeItemIdx)"
+                >
+                  {{ itemIncomeVal.value }}
+                </td>
+              }
+              <td
+                class="tbl-col-freeze-right tbl-cell"
+                (click)="handleRemoveSub(incomeItemIdx, subIncomeItemIdx )"
+              >
+                delete
+              </td>
+            </tr>
+          }
+
+          <tr>
+            <td
+              class="tbl-col-freeze-left tbl-cell"
+              (click)="handleAddSub(incomeItemIdx)"
+            >
+            Add new {{ incomeItem.category }} Category
+            </td>
+            <td class="tbl-cell bg-slate-300" [colSpan]="months().length + 1"></td>
+            
+          </tr>
+          <tr class="border-b-4 border-solid">
+            <td class="tbl-col-freeze-left tbl-cell">Sub totals</td>
+            @for (itemVal of incomeItem.total; track itemVal; let itemValIdx = $index) {
+              <td
+                class="tbl-cell bg-slate-100 tbl-cell-value"
+              >
+                {{ itemVal }}
+              </td>
+            }
+            <td class="tbl-col-freeze-right tbl-cell"></td>
+          </tr>
+        }
+        <tr>
+          <td
+            class="tbl-col-freeze-left tbl-cell"
+            (click)="handleAddParent()"
+          >
+            Add New {{ title }} Category
+          </td>
+          <td class="tbl-cell bg-slate-300" [colSpan]="months().length + 1"></td>
+        </tr>
+        <tr>
+          <td class="tbl-col-freeze-left tbl-cell">{{ title }} total</td>
+          @for (incomeMonthTotalVal of budgetTotal(); track incomeMonthTotalVal; let incomeMonthTotalIdx = $index) {
+            <td
+              class="tbl-cell bg-slate-100 tbl-cell-value"
+            >
+              {{ incomeMonthTotalVal }}
+            </td>
+          }
+          <td class="tbl-col-freeze-right tbl-cell"></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>

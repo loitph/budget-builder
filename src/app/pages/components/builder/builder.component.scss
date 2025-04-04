@@ -1,0 +1,11 @@
+.tbl-cell {
+  @apply min-w-[200px] max-w-[200px] outline-1 outline -outline-offset-1 outline-[#e5e7eb] p-2;
+}
+
+.tbl-col-freeze-right {
+  @apply sticky sm:right-0 bg-slate-300 min-w-[100px] max-w-[100px];
+}
+
+.tbl-col-freeze-left {
+  @apply sticky sm:left-0 bg-slate-300 z-10 min-w-[300px] max-w-[300px];
+}

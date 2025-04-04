@@ -6,3 +6,7 @@
 @tailwind utilities;
 
 @import "./assets/styles/custom";
+
+body {
+  overflow: hidden;
+}
