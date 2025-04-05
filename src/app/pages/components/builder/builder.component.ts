@@ -14,6 +14,7 @@ import {
 import {
   BehaviorSubject,
   delay,
+  Observable,
   of,
   Subject,
   switchMap,
@@ -22,7 +23,7 @@ import {
 } from 'rxjs';
 import { BudgetData } from '../../../models/budget.model';
 import { ScrollEventService } from '../../../services/scroll-event.service';
-import { MonthPattern } from '../../../shared/constant';
+import { ApplyAllOptions, MonthPattern } from '../../../shared/constant';
 import { BalanceService } from '../../../services/balance.service';
 import { FormsModule } from '@angular/forms';
 import { DateService } from '../../../services/date.service';
@@ -44,6 +45,7 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
   @Input() title: string = '';
   @Input() type: 'income' | 'expense' = 'income';
   @Input() showMonths: boolean = true;
+  @Input() triggerEntireBudget$!: Observable<number>;
 
   currentCell: HTMLTableCellElement | null = null;
 
@@ -75,6 +77,8 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
   currentCellIndex = 0;
   currentType = 'income';
 
+  applyAllOptions = [...ApplyAllOptions];
+
   constructor(
     private scrollEvent: ScrollEventService,
     private balance: BalanceService,
@@ -87,6 +91,7 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
     this.handleShowContextMenuData();
     this.handleDisplayYear();
     this.handleDisplayNumberOfMonths();
+    this.handleTriggerApplyAllBudget();
   }
 
   ngAfterViewInit(): void {
@@ -255,18 +260,42 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
     this.contextMenuY = event.clientY;
   }
 
-  applyToAll(): void {
+  applyAllWithOption(option: string): void {
     // close context menu
     this.showContextMenu = false;
 
+    switch (option) {
+      case 'onSubCategory':
+        this.applyAllSubCategory();
+        break;
+      case 'onCategory':
+        this.applyCategory();
+        break;
+      case 'onCategories':
+        this.applyCategories();
+        break;
+      case 'allBudget':
+        const category = [...this.budget()];
+        const subCategory = category[this.currentRow].list![this.currentCol].list;
+        const currentCellValue = subCategory![this.currentCellIndex].value;
+
+        // set the value to all cells in the column
+        this.balance.actionApplyAllBudget$.next(currentCellValue || 0);
+        break;
+      default:
+        break;
+    }
+  }
+
+  private applyAllSubCategory(): void {
     // get the cell value
-    const updatedData = [...this.budget()];
-    const list = updatedData[this.currentRow].list![this.currentCol].list;
-    const currentCellValue = list![this.currentCellIndex].value;
+    const category = [...this.budget()];
+    const subCategory = category[this.currentRow].list![this.currentCol].list;
+    const currentCellValue = subCategory![this.currentCellIndex].value;
 
     // set the value to all cells in the column
     for (let i = 0; i < this.months().length; i++) {
-      updatedData[this.currentRow].list![this.currentCol].list![i].value =
+      category[this.currentRow].list![this.currentCol].list![i].value =
         currentCellValue;
 
       const el = this.elements
@@ -288,8 +317,85 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     // update the budget data
-    this.budget.set(updatedData);
+    this.budget.set(category);
     this.calculateSum(this.currentRow);
+  }
+
+  private applyCategory(): void {
+    // get the cell value
+    const category = [...this.budget()];
+    const subCategory = category[this.currentRow].list![this.currentCol].list;
+    const currentCellValue = subCategory![this.currentCellIndex].value;
+
+    // set the value to all cells in the column
+    const categoryIndex = this.currentRow;
+    (category[this.currentRow].list || []).flatMap((cell, subIndex) =>
+      (cell.list || []).map((item, itemIndex) => ({
+        item,
+        categoryIndex,
+        subIndex,
+        itemIndex
+      }))
+    ).forEach(({item, categoryIndex, subIndex, itemIndex}) => {
+      item.value = currentCellValue;
+
+      const el = this.elements.toArray().find(
+        (el) =>
+          el.nativeElement.id ===
+          this.getCellId(this.currentType, categoryIndex, subIndex, itemIndex)
+      );
+  
+      if (el && currentCellValue !== undefined) {
+        el.nativeElement.innerText = currentCellValue.toString();
+      }
+
+    });
+
+    // update the budget data
+    this.budget.set(category);
+    this.calculateSum(categoryIndex);
+  }
+
+  private applyCategories(cellValue?: number): void {
+    // get the cell value
+    const category = [...this.budget()];
+    const subCategory = category[this.currentRow].list![this.currentCol].list;
+    const currentCellValue = cellValue !== undefined ? cellValue : subCategory![this.currentCellIndex].value;
+
+    // set the value to all cells in the column
+    category.flatMap((sub, categoryIndex) =>
+      (sub.list || []).flatMap((cell, subIndex) =>
+        (cell.list || []).map((item, itemIndex) => ({
+          item,
+          categoryIndex,
+          subIndex,
+          itemIndex
+        }))
+      )
+    ).forEach(({item, categoryIndex, subIndex, itemIndex}) => {
+      item.value = currentCellValue;
+
+      const el = this.elements.toArray().find(
+        (el) =>
+          el.nativeElement.id ===
+          this.getCellId(this.currentType, categoryIndex, subIndex, itemIndex)
+      );
+
+      if (el && currentCellValue !== undefined) {
+        el.nativeElement.innerText = currentCellValue.toString();
+      }
+
+      // update the budget data
+      this.budget.set(category);
+      this.calculateSum(categoryIndex);
+    });
+  }
+
+  private handleTriggerApplyAllBudget(): void {
+    this.triggerEntireBudget$.pipe(
+      tap((currentCellValue) => this.applyCategories(currentCellValue)),
+      takeUntil(this.destroy$),
+    ).subscribe();
   }
 
   private onKeyDown(e: KeyboardEvent): void {

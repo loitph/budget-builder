@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, Subject } from 'rxjs';
 import { BudgetData } from '../models/budget.model';
 
 @Injectable({
@@ -7,6 +7,7 @@ import { BudgetData } from '../models/budget.model';
 })
 export class BalanceService {
   balance$ = new BehaviorSubject<BudgetData[]>([]);
+  actionApplyAllBudget$ = new Subject<number>();
 
   constructor() { }
 }
