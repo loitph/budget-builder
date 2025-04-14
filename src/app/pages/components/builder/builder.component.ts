@@ -27,11 +27,12 @@ import { ApplyAllOptions, MonthPattern } from '../../../shared/constant';
 import { BalanceService } from '../../../services/balance.service';
 import { FormsModule } from '@angular/forms';
 import { DateService } from '../../../services/date.service';
+import { ActiveOptionDirective } from '../../../directives/active-option.directive';
 
 @Component({
   selector: 'app-builder',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, ActiveOptionDirective],
   templateUrl: './builder.component.html',
   styleUrl: './builder.component.scss',
 })
@@ -260,7 +261,9 @@ export class BuilderComponent implements OnInit, OnDestroy, AfterViewInit {
     this.contextMenuY = event.clientY;
   }
 
-  applyAllWithOption(option: string): void {
+  applyAllWithOption(option: string, optionActive: boolean): void {
+    if (!optionActive) return;
+
     // close context menu
     this.showContextMenu = false;
 
